@@ -377,6 +377,8 @@ services:
     ports:
       - "$SENTRY_BIND:80/tcp"
     image: "nginx:1.25.1-alpine"
+    networks:
+      - sentry-frontend
     volumes:
       - type: bind
         read_only: true
@@ -463,3 +465,7 @@ volumes:
   sentry-kafka-log:
   sentry-smtp-log:
   sentry-clickhouse-log:
+
+networks:
+  sentry-frontend:
+    name: sentry-frontend
