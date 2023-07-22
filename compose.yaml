@@ -82,6 +82,8 @@ x-sentry-defaults: &sentry_defaults
     - "./sentry:/etc/sentry"
     - "./geoip:/geoip:ro"
     - "./certificates:/usr/local/share/ca-certificates:ro"
+  networks:
+    - sentry-default
 x-snuba-defaults: &snuba_defaults
   <<: *restart_policy
   depends_on:
@@ -102,6 +104,8 @@ x-snuba-defaults: &snuba_defaults
     # Leaving the value empty to just pass whatever is set
     # on the host system (or in the .env file)
     SENTRY_EVENT_RETENTION_DAYS:
+  networks:
+    - sentry-default
 #endregion
 
 services:
@@ -112,6 +116,8 @@ services:
     volumes:
       - "sentry-smtp:/var/spool/exim4"
       - "sentry-smtp-log:/var/log/exim4"
+    networks:
+      - sentry-default
   memcached:
     <<: *restart_policy
     image: "memcached:1.6.21-alpine"
@@ -120,6 +126,8 @@ services:
       <<: *healthcheck_defaults
       # From: https://stackoverflow.com/a/31877626/5155484
       test: echo stats | nc 127.0.0.1 11211
+    networks:
+      - sentry-default
   redis:
     <<: *restart_policy
     image: "redis:6.2.12-alpine"
@@ -132,6 +140,8 @@ services:
       nofile:
         soft: 10032
         hard: 10032
+    networks:
+      - sentry-default
   postgres:
     <<: *restart_policy
     # Using the same postgres version as Sentry dev for consistency purposes
@@ -159,6 +169,8 @@ services:
         read_only: true
         source: ./postgres/
         target: /opt/sentry/
+    networks:
+      - sentry-default
   zookeeper:
     <<: *restart_policy
     image: "confluentinc/cp-zookeeper:5.5.7"
@@ -180,6 +192,8 @@ services:
       <<: *healthcheck_defaults
       test:
         ["CMD-SHELL", 'echo "ruok" | nc -w 2 localhost 2181 | grep imok']
+    networks:
+      - sentry-default
   kafka:
     <<: *restart_policy
     depends_on:
@@ -212,6 +226,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 30
+    networks:
+      - sentry-default
   clickhouse:
     <<: *restart_policy
     image: clickhouse-self-hosted-local
@@ -246,6 +262,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 30
+    networks:
+      - sentry-default
   geoipupdate:
     image: "maxmindinc/geoipupdate:v5.1.1"
     # Override the entrypoint in order to avoid using envvars for config.
@@ -255,6 +273,8 @@ services:
       ["/usr/bin/geoipupdate", "-d", "/sentry", "-f", "/sentry/GeoIP.conf"]
     volumes:
       - "./geoip:/sentry"
+    networks:
+      - sentry-default
   snuba-api:
     <<: *snuba_defaults
   # Kafka consumer responsible for feeding events into Clickhouse
@@ -306,6 +326,8 @@ services:
         source: ./symbolicator
         target: /etc/symbolicator
     command: run -c /etc/symbolicator/config.yml
+    networks:
+      - sentry-default
   symbolicator-cleanup:
     <<: *restart_policy
     image: symbolicator-cleanup-self-hosted-local
@@ -316,6 +338,8 @@ services:
     command: '"55 23 * * * gosu symbolicator symbolicator cleanup"'
     volumes:
       - "sentry-symbolicator:/data"
+    networks:
+      - sentry-default
   web:
     <<: *sentry_defaults
     ulimits:
@@ -379,6 +403,7 @@ services:
     image: "nginx:1.25.1-alpine"
     networks:
       - sentry-frontend
+      - sentry-default
     volumes:
       - type: bind
         read_only: true
@@ -407,6 +432,8 @@ services:
         <<: *depends_on-healthy
       web:
         <<: *depends_on-healthy
+    networks:
+      - sentry-default
   vroom:
     <<: *restart_policy
     image: "$VROOM_IMAGE"
@@ -420,6 +447,8 @@ services:
     depends_on:
       kafka:
         <<: *depends_on-healthy
+    networks:
+      - sentry-default
   vroom-cleanup:
     <<: *restart_policy
     image: vroom-cleanup-self-hosted-local
@@ -435,6 +464,8 @@ services:
     command: '"0 0 * * * find /var/lib/sentry-profiles -type f -mtime +$SENTRY_EVENT_RETENTION_DAYS -delete"'
     volumes:
       - sentry-vroom:/var/lib/sentry-profiles
+    networks:
+      - sentry-default
 
 volumes:
   # These store application data that should persist across restarts.
@@ -467,5 +498,7 @@ volumes:
   sentry-clickhouse-log:
 
 networks:
+  sentry-default:
+    name: sentry-default-network
   sentry-frontend:
     name: sentry-frontend
